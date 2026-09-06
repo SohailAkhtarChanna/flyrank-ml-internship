@@ -1,0 +1,555 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Search Intelligence for Content Review</title>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      line-height: 1.7;
+      max-width: 950px;
+      margin: 0 auto;
+      padding: 40px 24px;
+      color: #222;
+      background: #fff;
+    }
+
+    h1 {
+      font-size: 2.4rem;
+      line-height: 1.2;
+      margin-bottom: 10px;
+    }
+
+    h2 {
+      margin-top: 45px;
+      border-bottom: 2px solid #eee;
+      padding-bottom: 8px;
+    }
+
+    h3 {
+      margin-top: 28px;
+    }
+
+    .subtitle {
+      color: #666;
+      font-size: 1.1rem;
+      margin-bottom: 35px;
+    }
+
+    .abstract {
+      background: #f5f7fa;
+      padding: 24px;
+      border-radius: 10px;
+      border-left: 4px solid #333;
+    }
+
+    .metric-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+      gap: 15px;
+      margin: 25px 0;
+    }
+
+    .metric {
+      border: 1px solid #ddd;
+      border-radius: 10px;
+      padding: 18px;
+      text-align: center;
+    }
+
+    .metric strong {
+      display: block;
+      font-size: 1.7rem;
+      margin-bottom: 5px;
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      margin: 20px 0;
+    }
+
+    th, td {
+      border: 1px solid #ddd;
+      padding: 10px;
+      text-align: left;
+    }
+
+    th {
+      background: #f5f5f5;
+    }
+
+    code {
+      background: #f1f1f1;
+      padding: 2px 5px;
+      border-radius: 4px;
+    }
+
+    .recommendation {
+      border-left: 4px solid #555;
+      padding: 10px 18px;
+      margin: 18px 0;
+      background: #fafafa;
+    }
+
+    .footer {
+      margin-top: 60px;
+      padding-top: 25px;
+      border-top: 1px solid #ddd;
+      color: #666;
+    }
+
+    a {
+      color: #0645ad;
+    }
+  </style>
+</head>
+
+<body>
+
+  <h1>Search Intelligence for Content Review: Combining CTR Opportunity Scoring with Decision Tree Signals</h1>
+
+  <p class="subtitle">
+    FlyRank ML Internship — Search Intelligence Capstone
+  </p>
+
+  <div class="abstract">
+    <h2 style="margin-top:0; border:0;">Abstract</h2>
+    <p>
+      Search-intelligence teams need practical ways to identify content pages that deserve review without treating observed performance patterns as causal explanations of search rankings.
+      This study asks which content-performance signals can help prioritize pages for search visibility and click-through opportunities using an anonymized FlyRank ML Internship dataset.
+      I compare a transparent CTR-based baseline with a Decision Tree classifier trained using a client-grouped 80/20 split and a set of search, engagement, freshness, and content features.
+      The Decision Tree achieved 69.79% accuracy on 6,163 held-out pages from seven unseen clients, but its macro F1 score was 0.49 and it failed to correctly classify the excellent impression tier.
+      The results support a baseline-first, model-assisted, human-reviewed workflow in which CTR opportunity scoring identifies concrete review candidates while model signals provide additional directional context.
+    </p>
+  </div>
+
+  <h2>1. Introduction / Problem Statement</h2>
+
+  <p>
+    Search-intelligence teams need repeatable methods for deciding which content pages should receive attention first.
+    A useful workflow should prioritize measurable opportunities while avoiding unsupported claims about search-engine ranking mechanisms.
+  </p>
+
+  <p>
+    The research question for this project is:
+    <strong>Which content-performance signals can help identify pages that are worth reviewing for search visibility and click-through opportunities?</strong>
+  </p>
+
+  <p>
+    The decision supported by this analysis is how to prioritize pages for content and CTR review using observed search and engagement signals.
+    The approach is designed as decision support rather than an automatic content-optimization or ranking system.
+  </p>
+
+  <h2>2. Data</h2>
+
+  <p>
+    The analysis uses the anonymized FlyRank ML Internship development dataset, containing
+    <strong>30,000 content records and 44 columns</strong>.
+    The dataset includes search, content, engagement, freshness, and performance fields.
+  </p>
+
+  <h3>Feature groups</h3>
+
+  <ul>
+    <li><strong>Search signals:</strong> search volume, competition, and CPC.</li>
+    <li><strong>Content signals:</strong> word count and character count.</li>
+    <li><strong>Freshness signals:</strong> content age and days since last update.</li>
+    <li><strong>Search-performance signals:</strong> average position and CTR.</li>
+    <li><strong>Engagement signals:</strong> engagement rate, scroll rate, and AI traffic percentage.</li>
+    <li><strong>Target:</strong> <code>impression_tier</code>.</li>
+  </ul>
+
+  <h3>Evaluation data</h3>
+
+  <div class="metric-grid">
+    <div class="metric">
+      <strong>30,000</strong>
+      Dataset records
+    </div>
+    <div class="metric">
+      <strong>44</strong>
+      Dataset columns
+    </div>
+    <div class="metric">
+      <strong>23,837</strong>
+      Training records
+    </div>
+    <div class="metric">
+      <strong>6,163</strong>
+      Test records
+    </div>
+  </div>
+
+  <p>
+    A client-grouped 80/20 split was used. The training set contains 23,837 records from 25 clients,
+    while the held-out test set contains 6,163 records from seven unseen clients.
+    There was zero client overlap between the training and test sets.
+  </p>
+
+  <p>
+    Missing feature values were handled using medians calculated from the training set only.
+    The same training medians were then applied to the test set.
+  </p>
+
+  <p>
+    No client names, domains, private search queries, credentials, or raw client exports are included in this public-facing analysis.
+  </p>
+
+  <h2>3. Methodology</h2>
+
+  <h3>Model</h3>
+
+  <p>
+    The selected model is a <strong>Decision Tree Classifier</strong> with
+    <code>max_depth=5</code> and <code>random_state=42</code>.
+    The model was selected because its decision structure is relatively interpretable
+    and suitable for a decision-support workflow.
+  </p>
+
+  <h3>Features and target</h3>
+
+  <p>
+    The model uses 12 features:
+  </p>
+
+  <p>
+    <code>search_volume</code>,
+    <code>competition</code>,
+    <code>cpc</code>,
+    <code>word_count</code>,
+    <code>char_count</code>,
+    <code>content_age_days</code>,
+    <code>days_since_last_update</code>,
+    <code>avg_position</code>,
+    <code>ctr</code>,
+    <code>engagement_rate</code>,
+    <code>scroll_rate</code>, and
+    <code>ai_traffic_pct</code>.
+  </p>
+
+  <p>
+    The target is <code>impression_tier</code>, consisting of four observed classes:
+    <code>low</code>, <code>moderate</code>, <code>good</code>, and <code>excellent</code>.
+  </p>
+
+  <h3>Validation and leakage control</h3>
+
+  <p>
+    A client-grouped split was used so that content from the same client could not appear
+    in both training and testing data. This reduces the risk of learning client-specific patterns.
+    Client ID was not used as a predictive feature.
+  </p>
+
+  <p>
+    Test-set information was not used to calculate preprocessing statistics.
+    Training-set medians were used for both training and testing data.
+  </p>
+
+  <h3>Baseline</h3>
+
+  <p>
+    The Week-4 baseline is a transparent CTR opportunity score.
+    It prioritizes pages with meaningful search exposure and CTR below the average CTR
+    for their search-position bucket.
+  </p>
+
+  <p>
+    The baseline uses four position buckets:
+    <code>1-3</code>, <code>4-10</code>, <code>11-20</code>, and <code>21+</code>.
+    Pages must have at least 100 impressions and a positive CTR gap.
+  </p>
+
+  <p>
+    The baseline score is:
+  </p>
+
+  <p><strong><code>log1p(impressions) × CTR gap</code></strong></p>
+
+  <p>
+    This is a review-prioritization rule rather than a classification model.
+  </p>
+
+  <h2>4. Results</h2>
+
+  <div class="metric-grid">
+    <div class="metric">
+      <strong>69.79%</strong>
+      Decision Tree accuracy
+    </div>
+    <div class="metric">
+      <strong>0.49</strong>
+      Macro F1
+    </div>
+    <div class="metric">
+      <strong>0%</strong>
+      Excellent-tier recall
+    </div>
+    <div class="metric">
+      <strong>0%</strong>
+      Top-20 overlap
+    </div>
+  </div>
+
+  <p>
+    The Decision Tree achieved <strong>69.79% accuracy</strong> on the held-out test set.
+    Performance was strongest for the <code>low</code> impression tier, with an F1 score of
+    0.84 and recall of 0.90.
+  </p>
+
+  <p>
+    Performance was weaker for the <code>good</code> and <code>moderate</code> tiers,
+    and the model did not correctly classify any items in the <code>excellent</code> tier.
+  </p>
+
+  <h3>Classification performance</h3>
+
+  <table>
+    <tr>
+      <th>Tier</th>
+      <th>Precision</th>
+      <th>Recall</th>
+      <th>F1</th>
+    </tr>
+    <tr>
+      <td>excellent</td>
+      <td>0.00</td>
+      <td>0.00</td>
+      <td>0.00</td>
+    </tr>
+    <tr>
+      <td>good</td>
+      <td>0.67</td>
+      <td>0.41</td>
+      <td>0.51</td>
+    </tr>
+    <tr>
+      <td>low</td>
+      <td>0.80</td>
+      <td>0.90</td>
+      <td>0.84</td>
+    </tr>
+    <tr>
+      <td>moderate</td>
+      <td>0.57</td>
+      <td>0.65</td>
+      <td>0.60</td>
+    </tr>
+  </table>
+
+  <h3>Feature importance</h3>
+
+  <table>
+    <tr>
+      <th>Feature</th>
+      <th>Importance</th>
+    </tr>
+    <tr><td>CTR</td><td>68.0%</td></tr>
+    <tr><td>Engagement rate</td><td>16.4%</td></tr>
+    <tr><td>Days since last update</td><td>7.8%</td></tr>
+    <tr><td>Average position</td><td>3.8%</td></tr>
+    <tr><td>Scroll rate</td><td>1.5%</td></tr>
+    <tr><td>Content age</td><td>1.5%</td></tr>
+    <tr><td>Word count</td><td>0.9%</td></tr>
+    <tr><td>Character count</td><td>0.1%</td></tr>
+    <tr><td>CPC</td><td>0%</td></tr>
+    <tr><td>Competition</td><td>0%</td></tr>
+    <tr><td>Search volume</td><td>0%</td></tr>
+    <tr><td>AI traffic percentage</td><td>0%</td></tr>
+  </table>
+
+  <p>
+    CTR accounted for approximately 68.0% of the fitted tree's feature importance,
+    followed by engagement rate at approximately 16.4%, days since last update at 7.8%,
+    and average position at 3.8%.
+  </p>
+
+  <p>
+    These feature-importance values describe how this particular fitted Decision Tree used
+    the available features. They should not be interpreted as causal effects or evidence
+    of Google's ranking factors.
+  </p>
+
+  <h3>Baseline comparison</h3>
+
+  <p>
+    The Week-4 CTR baseline and Decision Tree produced substantially different
+    prioritization queues on the same held-out test set.
+    There was <strong>0% overlap</strong> between their Top-20 content items.
+  </p>
+
+  <table>
+    <tr>
+      <th>Observed tier</th>
+      <th>Baseline Top-20</th>
+      <th>Decision Tree Top-20</th>
+    </tr>
+    <tr>
+      <td>excellent</td>
+      <td>14</td>
+      <td>15</td>
+    </tr>
+    <tr>
+      <td>good</td>
+      <td>6</td>
+      <td>5</td>
+    </tr>
+    <tr>
+      <td>moderate</td>
+      <td>0</td>
+      <td>0</td>
+    </tr>
+    <tr>
+      <td>low</td>
+      <td>0</td>
+      <td>0</td>
+    </tr>
+  </table>
+
+  <p>
+    This should not be interpreted as evidence that one approach is universally better.
+    The baseline explicitly prioritizes positive CTR gaps combined with search exposure,
+    while the Decision Tree estimates impression-performance tiers from a broader set
+    of content and engagement features.
+  </p>
+
+  <h2>5. Limitations & Honest Framing</h2>
+
+  <p>
+    The results should be interpreted as <strong>directional decision support</strong>,
+    not as proof of causal effects or Google's ranking factors.
+  </p>
+
+  <p>
+    Although the Decision Tree achieved 69.79% accuracy, its macro F1 score was 0.49
+    and it did not correctly classify any items in the excellent impression tier.
+    Overall accuracy therefore does not mean that all impression tiers are predicted reliably.
+  </p>
+
+  <p>
+    The dataset is imbalanced across impression tiers, and the fitted tree relied heavily
+    on CTR and engagement rate. Feature importance describes how the model used the available
+    features in this specific training run; it does not establish that these variables cause
+    better or worse search performance.
+  </p>
+
+  <p>
+    The baseline and model also produce different prioritization queues.
+    Their Top-20 overlap was 0%, so the comparison is best understood as showing
+    different decision-support perspectives rather than proving that one method is better.
+  </p>
+
+  <p>
+    The Decision Tree also produced tied model scores for several top-ranked items because
+    pages reaching the same terminal tree leaf receive the same predicted class probabilities.
+    The ranking should therefore be combined with transparent rules and human review.
+  </p>
+
+  <h2>6. Ranked Recommendations</h2>
+
+  <div class="recommendation">
+    <h3>Priority 1 — Review high-exposure, low-CTR pages</h3>
+    <p>
+      Start with pages identified by the CTR baseline: pages with at least 100 impressions
+      and CTR below the average for their position bucket. Review titles, descriptions,
+      search-intent alignment, SERP presentation, and content relevance before making changes.
+    </p>
+  </div>
+
+  <div class="recommendation">
+    <h3>Priority 2 — Validate pages with strong model signals</h3>
+    <p>
+      Use the Decision Tree as a secondary signal. CTR, engagement rate, days since last update,
+      and average position were the most influential features in the fitted model.
+      These signals can identify patterns worth investigating but should not be treated
+      as causal ranking factors.
+    </p>
+  </div>
+
+  <div class="recommendation">
+    <h3>Priority 3 — Investigate ambiguous cases manually</h3>
+    <p>
+      The model struggled to distinguish the excellent tier and frequently confused neighboring
+      good, moderate, and low classes. These cases should therefore be reviewed by a human
+      rather than automatically assigned an action.
+    </p>
+  </div>
+
+  <div class="recommendation">
+    <h3>Priority 4 — Combine model evidence with contextual checks</h3>
+    <p>
+      Before recommending a content change, check factors not represented in the model,
+      including search intent, SERP features, brand effects, content quality, and measurement issues.
+    </p>
+  </div>
+
+  <p>
+    Overall, the recommended workflow is:
+    <strong>baseline-first, model-assisted, human-reviewed</strong>.
+  </p>
+
+  <h2>7. Artifacts</h2>
+
+  <p>The analysis produces three main visual artifacts:</p>
+
+  <ol>
+    <li>Decision Tree feature-importance chart.</li>
+    <li>Decision Tree confusion matrix.</li>
+    <li>Top-20 impression-tier comparison between the baseline and Decision Tree.</li>
+  </ol>
+
+  <p>
+    These artifacts provide complementary views of model behavior, classification performance,
+    and prioritization differences.
+  </p>
+
+  <h2>8. Reproducibility</h2>
+
+  <p>
+    The analysis is implemented in the FlyRank ML Internship repository and can be reproduced
+    from the capstone notebook.
+  </p>
+
+  <p>
+    Main notebook:
+    <code>work/notebooks/capstone.ipynb</code>
+  </p>
+
+  <p>
+    The workflow loads the anonymized development dataset, applies the documented feature
+    selection and train-only median imputation, creates a client-grouped 80/20 split,
+    trains the Decision Tree, evaluates its predictions, constructs the CTR baseline on
+    the same held-out test set, and compares the resulting prioritization queues.
+  </p>
+
+  <p>
+    The notebook is designed to run from top to bottom so that data preparation,
+    model training, evaluation, visualizations, baseline comparison, and recommendations
+    can be reproduced in sequence.
+  </p>
+
+  <h2>9. Acknowledgments & Data Credit</h2>
+
+  <p>
+    Built on the
+    <a href="https://flyrank.ai" target="_blank" rel="noopener">
+      FlyRank ML Internship dataset
+    </a>.
+  </p>
+
+  <p>
+    The analysis was completed as part of the FlyRank ML Internship and uses an anonymized
+    development dataset for search-intelligence research and decision-support analysis.
+  </p>
+
+  <div class="footer">
+    <p>
+      This research is intended for educational and decision-support purposes.
+      Results are directional and should not be interpreted as causal explanations
+      of search-engine ranking behavior.
+    </p>
+  </div>
+
+</body>
+</html>
